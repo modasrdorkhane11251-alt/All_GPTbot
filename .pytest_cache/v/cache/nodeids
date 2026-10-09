@@ -1,0 +1,7 @@
+[
+  "tests/test_documents.py::test_bad_type",
+  "tests/test_documents.py::test_text",
+  "tests/test_manual_approval.py::test_manual_approval_creates_missing_user",
+  "tests/test_manual_approval.py::test_manual_approval_is_atomic_and_idempotent",
+  "tests/test_plans.py::test_periods"
+]
