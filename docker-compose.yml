@@ -1,0 +1,14 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes: ["./data:/srv/app/data"]
+    command: ["python", "-m", "app"]
+  webhook:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes: ["./data:/srv/app/data"]
+    ports: ["127.0.0.1:8080:8080"]
+    command: ["python", "-m", "app.webhook"]
