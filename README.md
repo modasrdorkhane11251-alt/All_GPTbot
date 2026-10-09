@@ -1,31 +1,67 @@
-# Telegram AI Subscription Bot
+# All_GPTbot — upgraded self-hosted package
 
-Self-hostable Telegram AI bot starter with subscription periods (1/7/30/90 days), daily free quota, usage tracking, provider selection, document extraction, manual payment approval, admin commands, and a generic HMAC-signed payment callback.
+A self-hosted Telegram AI subscription bot with OpenAI-compatible and Gemini providers, daily free quota, user-selected provider/model, document extraction, manual payment review, an owner web panel, and an Ubuntu/Debian installer.
 
-## Important
-This is a functional starter, **not a production-certified payment/SaaS platform**. The generic callback is an integration contract. Before taking real payments, implement the payment provider's official signature, amount/currency/order reconciliation, and final-status verification. Hosted mode is a marker, not a complete multi-tenant SaaS implementation.
+## One-command install/update
 
-## Setup
-1. Copy `.env.example` to `.env`; configure `TELEGRAM_BOT_TOKEN`, numeric `ADMIN_IDS`, and at least one AI provider key.
-2. `python -m venv .venv && source .venv/bin/activate`
-3. `pip install -r requirements.txt`
-4. `python -m app`
+Upload the contents of this project to the **root** of the public GitHub repository `modasrdorkhane11251-alt/All_GPTbot`, including `install.sh`. Then run on an interactive Ubuntu/Debian SSH session:
 
-Docker: `cp .env.example .env`, edit `.env`, then `docker compose up --build -d`.
+```bash
+curl -fsSL https://raw.githubusercontent.com/modasrdorkhane11251-alt/All_GPTbot/main/install.sh | sudo bash
+```
 
-## Commands
+The installer downloads the current repository, asks for missing Telegram token, admin ID(s), provider key(s), and panel password, installs dependencies, creates/enables two systemd services, and checks that they start. If the `main` branch is not available, it tries `master`.
+
+### What installation does and does not do
+
+- Bot service: `all-gptbot.service`
+- Web admin service: `all-gptbot-panel.service`, bound only to `127.0.0.1:8091`
+- Config: `/opt/all-gptbot/.env` (preserved on updates)
+- SQLite database: `/opt/all-gptbot/data/bot.sqlite3`
+- Backups: `/opt/all-gptbot/backups/`
+- Updates back up the current source and database before replacing source files.
+- Does not edit `/opt/modasr-arz`, existing Nginx sites, or Cloudflare configuration.
+- Does not automatically expose the panel publicly. Configure a **separate hostname** and an HTTPS Nginx reverse proxy to `127.0.0.1:8091`. The panel's authentication cookie is secure-only, so use HTTPS.
+
+Check services and logs:
+
+```bash
+systemctl status all-gptbot all-gptbot-panel
+journalctl -u all-gptbot -n 100 --no-pager
+journalctl -u all-gptbot-panel -n 100 --no-pager
+```
+
+## Web owner panel
+
+The panel provides summary statistics, recent users, manual payment approval/rejection, user quota adjustments, subscription extension, and price/currency editing. Set `ADMIN_PANEL_PASSWORD` and `ADMIN_PANEL_SECRET` in `.env`; the installer prompts for a strong password and generates a secret. Keep the panel private behind HTTPS.
+
+## Telegram commands
+
 User: `/start`, `/help`, `/plans`, `/buy day|week|month|quarter`, `/status`, `/provider openai|gemini`, `/model <name>`, `/analyze`.
+
 Admin: `/admin_stats`, `/admin_users`, `/pending`, `/approve <payment_id>`, `/reject <payment_id> [reason]`, `/grant <telegram_user_id> <days>`, `/setquota <telegram_user_id> <daily_count>`.
 
-Manual payment flow: user creates a request with `/buy`; operator verifies transfer externally and approves with `/approve ID`.
+## Payments: important limitation
+
+The current payment flow is **manual bank-transfer review**. The included HMAC callback is an integration contract only; it is not a real payment gateway and must not be treated as proof that money was received. No live Zarinpal, IDPay, Zibal, or other gateway is claimed to be implemented in this package. Before accepting live online payments, implement and test the selected provider's official create-payment and server-side verification APIs, checking merchant/order reference, amount, currency, and final paid status. Never activate subscriptions solely because a browser was redirected to a success URL.
 
 ## AI providers
-OpenAI-compatible chat completions and Google Gemini are implemented. Set `OPENAI_BASE_URL` for a compatible endpoint. Provider keys are server-side environment variables; users cannot supply arbitrary URLs. Voice transcription, audio generation, Claude/Mistral-specific adapters, and Telegram Business integration are not implemented in this starter.
 
-## Generic payment callback
-Run `python -m app.webhook`. Endpoint: `POST /payment/callback`, header `X-Signature: sha256=<HMAC-SHA256 of exact raw JSON body>`. Body:
-`{"event_id":"unique-event","telegram_user_id":123456789,"plan":"month","status":"paid"}`
-Set a long random `PAYMENT_WEBHOOK_SECRET`. This only authenticates the integration caller; it does not independently verify a gateway transaction. Add the provider's official verification and reconcile amount, currency, merchant reference, and final status before live use.
+Set `OPENAI_API_KEY` or `GEMINI_API_KEY` in `.env`. Gemini API keys are sent using the `x-goog-api-key` header, not embedded in request URLs. API errors are intentionally summarized without logging credentials.
+
+## Local development/tests
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+pytest -q
+python -m app
+python -m app.admin_panel
+```
+
+For local panel development, remember that the production session cookie is `Secure` and therefore expects HTTPS.
 
 ## Security
-Never commit `.env`; rotate exposed credentials. Use HTTPS/reverse proxy, backups, spending limits, monitoring, and sandbox payment tests. Never collect Telegram login codes, 2FA passwords, or personal-account session files.
+
+Never commit `.env`, database files, API keys, or bot tokens. If a token/key was exposed, rotate it. Use HTTPS, regular backups, provider spending limits, and sandbox payment tests.
