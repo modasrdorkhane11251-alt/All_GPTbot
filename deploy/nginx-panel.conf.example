@@ -1,0 +1,18 @@
+# Example only: save as /etc/nginx/sites-available/all-gptbot-panel
+# Replace panel.example.com with the separate hostname you configured in DNS.
+# Obtain TLS with Certbot before relying on the panel's Secure session cookie.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name panel.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8091;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+}
