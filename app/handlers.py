@@ -94,8 +94,12 @@ async def approve(update,ctx):
     if not ctx.args or not ctx.args[0].isdigit(): await update.message.reply_text("استفاده: /approve <id>"); return
     p=db.payment(int(ctx.args[0]))
     if not p or p["status"]!="pending": await update.message.reply_text("درخواست وجود ندارد یا قبلاً بررسی شده."); return
-    if not db.review(p["id"],"approved",f"by:{update.effective_user.id}"): await update.message.reply_text("قبلاً بررسی شده."); return
-    until=db.extend(p["user_id"],PLANS[p["plan"]]["days"])
+    try:
+        until=db.approve_payment(p["id"], update.effective_user.id)
+    except (ValueError, RuntimeError):
+        await update.message.reply_text("تأیید انجام نشد؛ وضعیت پرداخت را بررسی کنید."); return
+    if not until:
+        await update.message.reply_text("قبلاً بررسی شده."); return
     await update.message.reply_text(f"تأیید شد؛ اشتراک تا {until}")
     try: await ctx.bot.send_message(p["user_id"],f"پرداخت تأیید شد؛ پلن {PLANS[p['plan']]['label']} فعال شد.")
     except Exception: pass

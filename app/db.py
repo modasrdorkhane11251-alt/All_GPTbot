@@ -47,6 +47,52 @@ def review(pid,status,note):
     with lock, conn() as c:
         cur=c.execute("UPDATE payments SET status=?,reviewed=?,note=? WHERE id=? AND status='pending'",(status,now(),note,int(pid)))
         return cur.rowcount==1
+def approve_payment(pid, admin_id):
+    """Atomically mark a pending manual transfer as approved and extend its plan.
+
+    Returns the resulting subscription expiry, or None when the payment was
+    missing/already reviewed. The payment status and entitlement are committed
+    together so a crash cannot leave an approved payment without a subscription.
+    """
+    from .plans import PLANS
+    with lock, conn() as c:
+        row = c.execute("SELECT * FROM payments WHERE id=?", (int(pid),)).fetchone()
+        if not row or row["status"] != "pending":
+            return None
+        plan = row["plan"]
+        if plan not in PLANS:
+            raise ValueError("Unknown plan on payment")
+        uid = int(row["user_id"])
+        user = c.execute("SELECT until FROM users WHERE id=?", (uid,)).fetchone()
+        if user is None:
+            today = datetime.now(timezone.utc).date().isoformat()
+            c.execute(
+                "INSERT INTO users(id,provider,quota,quota_day,created) VALUES(?,?,?,?,?)",
+                (uid, S.default_provider, S.free_quota, today, now()),
+            )
+            old_until = None
+        else:
+            old_until = user["until"]
+        try:
+            current = datetime.fromisoformat(old_until) if old_until else None
+        except (TypeError, ValueError):
+            current = None
+        current_time = datetime.now(timezone.utc)
+        # Handle timestamps stored without an explicit timezone as UTC.
+        if current and current.tzinfo is None:
+            current = current.replace(tzinfo=timezone.utc)
+        start = current if current and current > current_time else current_time
+        until = (start + timedelta(days=int(PLANS[plan]["days"]))).isoformat()
+        c.execute("UPDATE users SET until=? WHERE id=?", (until, uid))
+        cur = c.execute(
+            "UPDATE payments SET status='approved', reviewed=?, note=? WHERE id=? AND status='pending'",
+            (now(), f"by:{int(admin_id)}", int(pid)),
+        )
+        if cur.rowcount != 1:
+            # Normally prevented by the transaction/lock; fail closed if state changed.
+            raise RuntimeError("Payment was reviewed concurrently")
+        return until
+
 def extend(uid,days):
     with lock, conn() as c:
         r=c.execute("SELECT until FROM users WHERE id=?",(int(uid),)).fetchone()
