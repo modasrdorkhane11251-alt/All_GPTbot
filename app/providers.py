@@ -9,8 +9,16 @@ async def ask(provider,model,prompt,image=None,mime="image/jpeg"):
         url=f"https://generativelanguage.googleapis.com/v1beta/models/{model or S.gemini_model}:generateContent"
         try:
             async with httpx.AsyncClient(timeout=S.timeout) as client:
-                r=await client.post(url,params={"key":S.gemini_key},json={"contents":[{"role":"user","parts":parts}]})
-                r.raise_for_status(); return "".join(x.get("text","") for x in r.json()["candidates"][0]["content"]["parts"])
+                r=await client.post(url,headers={"x-goog-api-key":S.gemini_key},json={"contents":[{"role":"user","parts":parts}]})
+                if r.is_error:
+                    # Do not include request URLs or credentials in logs/errors.
+                    raise ProviderError(f"Gemini API returned HTTP {r.status_code}; check GEMINI_API_KEY and GEMINI_MODEL.")
+                data=r.json()
+                candidates=data.get("candidates") or []
+                if not candidates:
+                    reason=(data.get("promptFeedback") or {}).get("blockReason", "no candidate returned")
+                    raise ProviderError(f"Gemini returned no answer ({reason}). Check the model and prompt.")
+                return "".join(x.get("text","") for x in candidates[0].get("content",{}).get("parts",[]))
         except (httpx.HTTPError,KeyError,IndexError,ValueError) as e: raise ProviderError(f"AI request failed ({type(e).__name__}).")
     if provider!="openai": raise ProviderError("Supported providers: openai, gemini.")
     if not S.openai_key: raise ProviderError("OPENAI_API_KEY is not configured.")
