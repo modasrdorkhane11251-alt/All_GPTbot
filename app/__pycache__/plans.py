@@ -1,1 +1,0 @@
-PLANS={"day":{"label":"1 day","days":1},"week":{"label":"7 days","days":7},"month":{"label":"30 days","days":30},"quarter":{"label":"90 days","days":90}}
